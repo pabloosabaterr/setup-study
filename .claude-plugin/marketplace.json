@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "setup-study",
+  "description": "Study material generator for university subjects: per-topic LaTeX summaries and a mock exam built from slides and past exams",
+  "owner": {
+    "name": "Pablo Sabater"
+  },
+  "plugins": [
+    {
+      "name": "setup-study",
+      "description": "Turn topic slides and past exams (PDF) into per-topic LaTeX summaries, a question bank and a mega mock exam with solutions. Asks which topics are in scope and which language to write in; incremental on re-runs.",
+      "author": {
+        "name": "Pablo Sabater"
+      },
+      "source": "./plugins/setup-study",
+      "category": "productivity"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% LANGUAGE: Spanish -> [spanish,es-noshorthands,es-tabla]; English -> [english]; Portuguese -> [portuguese]
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage[most]{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{multicol}
+\usepackage[hidelinks]{hyperref}
+\setlength{\emergencystretch}{3em}
+
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{solbg}{HTML}{EEF5EC}
+\definecolor{solfr}{HTML}{3C7A3C}
+\definecolor{keybg}{HTML}{F3F0E6}
+\definecolor{keyfr}{HTML}{8A6D1F}
+
+\newtcolorbox{sol}[1][]{colback=solbg,colframe=solfr,boxrule=0.5pt,arc=2pt,
+  left=6pt,right=6pt,top=4pt,bottom=4pt,breakable,title={#1},fonttitle=\bfseries\small,
+  coltitle=white}
+\newtcolorbox{key}[1][]{colback=keybg,colframe=keyfr,boxrule=0.5pt,arc=2pt,
+  left=6pt,right=6pt,top=4pt,bottom=4pt,breakable,title={#1},fonttitle=\bfseries\small}
+\newtcolorbox{info}{colback=accent!6,colframe=accent,boxrule=0.6pt,arc=2pt,breakable}
+
+% Label used by \Q: "Question" (questions in the real exam language), "Pregunta", etc.
+\newcommand{\qname}{Question}
+\newcounter{q}
+\newcommand{\Q}[1]{\refstepcounter{q}\par\medskip\noindent{\large\bfseries\color{accent}\qname\ \theq\ --- #1}\par\nopagebreak\smallskip}
+\newcommand{\D}[1]{\par\smallskip\noindent\textbf{#1}\ }
+
+\setlist[enumerate]{itemsep=2pt,topsep=3pt}
+\setlist[itemize]{itemsep=1pt,topsep=2pt}
+
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small ASIGNATURA --- TITULO}
+\rhead{\small FECHA}
+\cfoot{\thepage}
