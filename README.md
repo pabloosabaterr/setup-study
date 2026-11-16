@@ -48,8 +48,8 @@ Output:
 STUDY.md                    map of the folder (read this first)
 study.json                  scope, language, exam info (edit freely)
 question_bank.md
-latex/summaries/topicNN.pdf
-latex/summaries/topicNN_key.md      compact key points, used to write the mega exam
+latex/summaries/topicNN.pdf labNN.pdf   lectures and labs, each numbered on its own
+latex/summaries/*_key.md            compact key points, used to write the mega exam
 latex/mega_exam.pdf
 latex/mega_exam_solutions.pdf
 md/ dedup/ exams/md/ exams/clean/   intermediate text

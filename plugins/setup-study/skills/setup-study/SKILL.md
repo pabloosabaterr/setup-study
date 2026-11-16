@@ -29,8 +29,8 @@ The user puts the topic PDFs (slides, lab handouts) loose in the subject directo
   _review.txt _changes.txt   written by prepare.sh
   question_bank.md           step 4
   latex/
-    summaries/topicNN.tex    one per in-scope topic, each compiles alone
-    summaries/topicNN_key.md compact key points of the topic, for writing the mega exam
+    summaries/<name>.tex     one per in-scope topic/lab (topic03.tex, lab02.tex…), each compiles alone
+    summaries/<name>_key.md  compact key points of each, for writing the mega exam
     mega_exam.tex            only the exam (+ formula sheet at the end)
     mega_exam_solutions.tex  solutions, same numbering
 ```
@@ -64,10 +64,18 @@ markitdown 0.1.x extracts by columns: diagram labels get glued to neighbouring l
 
 ## 3. Ask scope and language
 
-List the detected topics with the title taken from the first lines of each `dedup/` file. Number them in a natural order: if there are several kinds of files (lectures, labs/practicals, problem sets), number each kind in `sort -V` order, lectures first, rather than mixing them alphabetically. Also look in the slides (usually the first and last topics) for the exam date, format, duration and scope, and note which language the slides and exams use.
+List the detected sources with the title taken from the first lines of each `dedup/` file, grouped by **kind**, and never number different kinds in one sequence:
+
+| kind | what | id | file name |
+|------|------|----|-----------|
+| `topic` | lectures, theory slides (the default) | `T03` | `topic03` |
+| `lab` | lab / practical handouts | `L02` | `lab02` |
+| `problems` | problem sets, exercise sheets | `P01` | `problems01` |
+
+Tell the kind from the file name and the first page (`Lab-02.pdf`, "Practical 2", "Problem set 1", "Folha de exercícios"…). Within a kind, use the number the source itself has (`Lab-00.pdf` → `L00`, "Lecture 7" → `T07`); if it has none, number in `sort -V` order from 01. The id names the bank section, the mega exam tags and the summary files, so a lab is never "topic 19". Also look in the slides (usually the first and last topics) for the exam date, format, duration and scope, and note which language the slides and exams use.
 
 Then ask the user, in a single AskUserQuestion call with two questions (skip any they already answered in the invocation, e.g. "topics 1 to 6, in English", or a pasted announcement with the syllabus). Phrase the questions and options in the user's language:
-1. **Which topics are in scope.** Options like "All (1–N)" and the scope the slides announce if there is one (e.g. "1–6, as stated in lecture 11"). They can type a range in Other. Partial topics ("first 8 slides of lecture 13") are allowed: cut the dedup file to that part (e.g. `dedup/<topic>_partial.txt`) and point `file` to it.
+1. **Which topics are in scope.** Options like "All (T01–T12, L00–L05)" and the scope the slides announce if there is one (e.g. "T01–T06 and labs 0–3, as stated in lecture 11"). They can type a range in Other. Partial topics ("first 8 slides of lecture 13") are allowed: cut the dedup file to that part (e.g. `dedup/<topic>_partial.txt`) and point `file` to it.
 2. **Which language for the documents.** Options: the course language, the user's own language if different (with technical terms kept in English), and English if neither is. Put the course language first and mark it (Recommended).
 
 Write `study.json`:
@@ -78,18 +86,21 @@ Write `study.json`:
   "exams_dir": "tests",
   "output_language": "en",
   "topics": [
-    {"n": 1, "file": "dedup/Computer Networks - Lecture 1 (EN).txt", "pages": "pages/Computer_Networks_-_Lecture_1__EN_",
-     "title": "Introduction to computer networks", "in_scope": true}
+    {"id": "T01", "kind": "topic", "n": 1, "name": "topic01",
+     "file": "dedup/Computer Networks - Lecture 1 (EN).txt", "pages": "pages/Computer_Networks_-_Lecture_1__EN_",
+     "title": "Introduction to computer networks", "in_scope": true},
+    {"id": "L00", "kind": "lab", "n": 0, "name": "lab00",
+     "file": "dedup/Lab-00.txt", "pages": "pages/Lab-00", "title": "Lab 0: Wireshark basics", "in_scope": true}
   ],
   "books": "chapters/sections in scope, if the announcement lists them",
   "exam": {"date": "2026-10-29 18:30", "format": "2 h, closed book, open questions", "language": "en"}
 }
 ```
-`topicNN` in the output names is the `n` here (zero-padded).
+`name` is the base name of the summary files (`latex/summaries/<name>.tex`, `<name>_key.md`); `id` is the section of the question bank and the tag in the mega exam. List the kinds in that order (topics, labs, problems).
 
 ## 4. Question bank (`question_bank.md`)
 
-Extract every question from every clean exam (plus the transcribed scans and images) and file it under the topic it belongs to:
+Extract every question from every clean exam (plus the transcribed scans and images) and file it under the topic or lab it belongs to (sections named by `id`, kinds in the order of `study.json`):
 
 ```markdown
 ## T06 — Sliding window
@@ -114,27 +125,28 @@ Extract every question from every clean exam (plus the transcribed scans and ima
 
 Spawn one subagent per in-scope topic, **all in the same message** so they run in parallel (general-purpose type). Give each this prompt, filled in:
 
-> Write a LaTeX summary in {output_language} of topic {NN} "{title}" of {subject}. {If not English: Keep technical terms in English as the course uses them.} All headings and prose in {output_language}; set the babel language accordingly in the preamble.
+> Write a LaTeX summary in {output_language} of {kind word in output_language, e.g. "topic"/"lab"} {n} "{title}" of {subject}. {If not English: Keep technical terms in English as the course uses them.} All headings and prose in {output_language}; set the babel language accordingly in the preamble.
 > - Sources: read {abs path to dedup file} entirely; `=== p N ===` marks where PDF page N starts. The page images of the original are in {abs path to pages/<topic>/} (p-01.png, p-02.png…, one per PDF page; slides.pdf is the PDF itself). Read {abs path to pages/<topic>/index.txt} first: look at the images of the pages it marks FIG, and of any other page whose text is garbled or clearly lost a layout (scattered labels, a table or code that makes no sense). Do not look at the other pages: images cost far more than text. The raw text is {abs path to raw md} if the dedup removed something. {If partial: only pages/slides X–Y are in scope.}
-> - Past exam questions for this topic: the "## T{NN}" section of {abs path to question_bank.md}. Use it only to check that every concept those questions ask about is explained in the summary; do not add a section about past questions or what comes up most (the student studies the theory and then the mega exam).
-> - Start from the preamble {abs path to templates/preamble.tex}; set the header to "{subject} --- {word for Topic in output_language} {NN}" / "{exam date}". The environments `key`, `sol`, `info`, the macros `\Q`, `\D`, `\slidefig` and `listings` are already defined there.
+> - Past exam questions for it: the "## {id}" section of {abs path to question_bank.md}. Use it only to check that every concept those questions ask about is explained in the summary; do not add a section about past questions or what comes up most (the student studies the theory and then the mega exam).
+> - Start from the preamble {abs path to templates/preamble.tex}; set the header to "{subject} --- {kind word in output_language, capitalised} {n}" / "{exam date}" (e.g. "Lab 2", not "Topic 20"). The environments `key`, `sol`, `info`, the macros `\Q`, `\D`, `\slidefig` and `listings` are already defined there.
+> - {If kind is lab or problems: This is a lab/exercise handout, not lecture slides: the summary covers what it teaches and asks for: the tools and commands, the APIs, each task or exercise with the approach and the key code or steps to solve it, and the expected output. Mark solutions you work out yourself "(not in the handout)".}
 > - **Completeness over brevity.** This summary replaces the slides for studying: every slide's content must be in it, in slide order, explained (not just listed). Do not drop examples, code, tables, definitions or caveats from the slides to save space. There is no page limit: length follows the material (as a rough guide, one page per 4–6 content slides). Concise wording is welcome; omitting content is not.
-> - **Reuse the slides' own diagrams.** When a slide has a diagram, schema, timeline, table or figure that explains better than prose (state diagrams, memory layouts, protocol exchanges, architecture pictures), include it from the original PDF with `\slidefig{<rel path to slides.pdf from latex/summaries>}{<pdf page>}{<trim l b r t as fractions>}{<caption naming the slide>}`. The page number is the `=== p N ===` marker before that content; find the crop from the page image. Check the crops once, after the summary compiles: `~/.local/share/markitdown-venv/bin/python {abs path to scripts/pages.py} figsheet topic{NN}.pdf /tmp/topic{NN}_figs` renders only the pages with figures, four per PNG, and prints which pages each sheet holds; Read the sheets, fix the bad crops, and re-check only the pages you changed. Redraw in TikZ only if the original is unreadable or a cleaner version is clearly better. Then explain the figure in the text.
+> - **Reuse the slides' own diagrams.** When a slide has a diagram, schema, timeline, table or figure that explains better than prose (state diagrams, memory layouts, protocol exchanges, architecture pictures), include it from the original PDF with `\slidefig{<rel path to slides.pdf from latex/summaries>}{<pdf page>}{<trim l b r t as fractions>}{<caption naming the slide>}`. The page number is the `=== p N ===` marker before that content; find the crop from the page image. Check the crops once, after the summary compiles: `~/.local/share/markitdown-venv/bin/python {abs path to scripts/pages.py} figsheet {name}.pdf /tmp/{name}_figs` renders only the pages with figures, four per PNG, and prints which pages each sheet holds; Read the sheets, fix the bad crops, and re-check only the pages you changed. Redraw in TikZ only if the original is unreadable or a cleaner version is clearly better. Then explain the figure in the text.
 > - Structure: (1) title with the slide range covered; (2) content, slide by slide or grouped by the slides' own sections, with their figures; (3) formulas, definitions and APIs to memorise, with every variable, unit, prototype and return value as the slides give them; (4) worked examples for every kind of calculation or code the topic has (verify numbers with Python, compile code if you can); (5) typical mistakes and confusions, if the slides or the bank show any.
 > - Every fact must come from the slides; follow their conventions (units, notation). When you add something the slides do not say (from the bank answers or general knowledge), mark it "(not in the slides)". If something is unclear, say so instead of inventing.
-> - Write {abs path}/latex/summaries/topic{NN}.tex and compile it from that folder with `latexmk -pdf -interaction=nonstopmode -silent topic{NN}.tex`; fix all errors and large overfull boxes, then `latexmk -c topic{NN}.tex` (always with the file name: other agents compile in the same folder at the same time). If latexmk fails because its log vanished, run it again.
-> - Also write {abs path}/latex/summaries/topic{NN}_key.md, in {output_language}, at most ~60 lines: the concepts, definitions, formulas, APIs, numeric conventions and calculation/code patterns of the topic, as compact bullets with the slide page for each (e.g. `- wait() blocks the parent until a child ends; returns its pid; status via WEXITSTATUS (p7)`). It is what the mega exam is written from, so include everything a question could be asked about, and nothing else (no prose, no examples).
+> - Write {abs path}/latex/summaries/{name}.tex and compile it from that folder with `latexmk -pdf -interaction=nonstopmode -silent {name}.tex`; fix all errors and large overfull boxes, then `latexmk -c {name}.tex` (always with the file name: other agents compile in the same folder at the same time). If latexmk fails because its log vanished, run it again.
+> - Also write {abs path}/latex/summaries/{name}_key.md, starting with a `# {id} — {title}` line, in {output_language}, at most ~60 lines: the concepts, definitions, formulas, APIs, numeric conventions and calculation/code patterns of the topic, as compact bullets with the slide page for each (e.g. `- wait() blocks the parent until a child ends; returns its pid; status via WEXITSTATUS (p7)`). It is what the mega exam is written from, so include everything a question could be asked about, and nothing else (no prose, no examples).
 > - Reply with only: the path to the PDF, the page count, which slides you included as figures, and anything in the slides you could not interpret.
 
-When they finish, check that every `topicNN.pdf` and `topicNN_key.md` exists. Rerun or fix the ones that failed. Keep the "could not interpret" notes: they go into `STUDY.md`.
+When they finish, check that every in-scope `<name>.pdf` and `<name>_key.md` exists. Rerun or fix the ones that failed. Keep the "could not interpret" notes: they go into `STUDY.md`.
 
 ## 6. Mega exam (main session)
 
-Write it yourself, because it needs the whole picture. Read `question_bank.md` (especially "Patterns") and every in-scope `latex/summaries/topicNN_key.md`. Do not read the full summaries: the key files exist so this context stays small. Open a summary `.tex`, a `dedup/` file or a page image only for the specific detail a question or solution needs (exact numbers, a figure, a convention).
+Write it yourself, because it needs the whole picture. Read `question_bank.md` (especially "Patterns") and every in-scope `latex/summaries/<name>_key.md`. Do not read the full summaries: the key files exist so this context stays small. Open a summary `.tex`, a `dedup/` file or a page image only for the specific detail a question or solution needs (exact numbers, a figure, a convention).
 
 `latex/mega_exam.tex`, using the same preamble (babel set to `output_language`; title page, instructions and formula sheet in `output_language`, questions in the real exam's language):
 - Title page with an `info` box: date and format of the real exam, scope (in-scope topics), where the questions come from (how many exams, which years, the patterns that repeat most), and how to use it.
-- The exam: `\Q{...}` questions covering **every** in-scope topic, each tagged with its topics, e.g. `\Q{Sliding window (T06)}`. Follow the real exam's format (e.g. a multiple-choice part and an open part if recent exams have them). Put the most frequent patterns first, as variants of recurring past questions, and include questions on topics that are new this year. Make it longer than the real exam on purpose. Use the real exam's language.
+- The exam: `\Q{...}` questions covering **every** in-scope topic, each tagged with its ids, e.g. `\Q{Sliding window (T06)}`, `\Q{Capturing a TCP handshake (L02)}`. Follow the real exam's format (e.g. a multiple-choice part and an open part if recent exams have them). Put the most frequent patterns first, as variants of recurring past questions, and include questions on topics that are new this year. Make it longer than the real exam on purpose. Use the real exam's language.
 - At the end, a one-page formula sheet (`multicols`) if the subject has formulas or APIs to remember.
 
 `latex/mega_exam_solutions.tex`, in `output_language`: an answer key for any multiple-choice part, then one `sol` box per question with the same numbering. Show the reasoning, not just the result, and cite the source (slide, past exam). Verify every numerical calculation with Python and compile/run code answers when possible. Every fact must come from the slides; if the material is ambiguous, say so in the solution.
@@ -152,11 +164,13 @@ Write `<subject>/STUDY.md` in `output_language` from `templates/STUDY.md`, filli
 
 ## 9. Re-runs (incremental)
 
+If `study.json` has topics without `kind`/`id` (made by an older version, where labs were numbered after the lectures as more topics), assign them as in step 3 and rename everything that uses the old numbers: summary files (`git mv` if it is a repo, else `mv`, and fix the `\lhead` and the title, e.g. "Topic 19" → "Lab 0"), the bank sections and every `[T19]`-style reference in the bank and its Patterns table, the mega exam tags, and `STUDY.md`. Recompile the renamed summaries.
+
 When `study.json` already exists:
 1. Read `STUDY.md`. Run `prepare.sh` again and read `_changes.txt`.
 2. A new topic file → add it to `study.json` and ask whether it is in scope (only about the new ones). If the user changes the scope, update `in_scope`. If they ask for another language, update `output_language` and regenerate all summaries, both exam files and `STUDY.md`.
 3. New or changed exams → extract only those into the bank. First remove the old entries with their `[source …]` tag, then update "Patterns".
-4. Regenerate a summary (subagent, step 5) only if its topic file changed, its bank section changed, it just entered the scope, or the user asks (e.g. after a skill update). Leave the others untouched. If a summary exists but its `topicNN_key.md` does not (made by an older version), write only the key file from the summary `.tex`, with the same rules as in step 5.
+4. Regenerate a summary (subagent, step 5) only if its topic file changed, its bank section changed, it just entered the scope, or the user asks (e.g. after a skill update). Leave the others untouched. If a summary exists but its `<name>_key.md` does not (made by an older version), write only the key file from the summary `.tex`, with the same rules as in step 5.
 5. Regenerate the mega exam and its solutions if anything above changed. Otherwise leave them.
 6. Update `STUDY.md` whenever anything above changed.
 7. If `_changes.txt` is empty and the scope did not change, say there is nothing new and stop.
