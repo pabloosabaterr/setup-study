@@ -2,7 +2,7 @@
 
 A [Claude Code](https://claude.com/claude-code) skill that turns a subject's slides and past exams into study material:
 
-- **One LaTeX summary per topic** (PDF): the complete content of the slides, explained, with the slides' own diagrams cropped from the original PDF, formulas and APIs to memorise, worked examples, and what usually comes up in exams.
+- **One LaTeX summary per topic** (PDF): the complete content of the slides, explained, with the slides' own diagrams cropped from the original PDF, formulas and APIs to memorise, and worked examples.
 - **A question bank** (`question_bank.md`): every past-exam question filed by topic, plus the patterns that repeat most.
 - **A mega mock exam** and a **separate solutions file** (PDF), covering every topic in scope, longer than the real exam on purpose.
 - **`STUDY.md`**: a map of the subject folder (sources, scope, where each kind of information lives, known gaps), so later sessions and agents can work on it without you explaining the structure again.
@@ -49,6 +49,7 @@ STUDY.md                    map of the folder (read this first)
 study.json                  scope, language, exam info (edit freely)
 question_bank.md
 latex/summaries/topicNN.pdf
+latex/summaries/topicNN_key.md      compact key points, used to write the mega exam
 latex/mega_exam.pdf
 latex/mega_exam_solutions.pdf
 md/ dedup/ exams/md/ exams/clean/   intermediate text
@@ -59,11 +60,11 @@ Add more slides or exams later and run it again: it converts only the new files,
 
 ## How it works
 
-1. `scripts/prepare.sh` converts every PDF/PPTX/DOCX with markitdown. For slides it removes the lines repeated by slide transitions (each line is kept only the first time it appears). It also renders every slide and exam page to PNG, so Claude can look at diagrams, scans and answers marked by circles or colour. Scanned PDFs and photos are listed in `_review.txt`, and Claude reads their page images.
+1. `scripts/prepare.sh` converts every PDF/PPTX/DOCX with markitdown. For slides it removes the lines repeated by slide transitions (each line is kept only the first time it appears) and marks where each page starts. It also renders every slide and exam page to PNG and indexes which slides have diagrams or tables, so Claude looks only at the pages that need it (images cost far more tokens than text). Exam text is cleaned of repeated whitespace and common headers. Scanned PDFs and photos are listed in `_review.txt`, and Claude reads their page images.
 2. Claude asks which topics are in scope and which language to use, and saves the answers in `study.json`.
 3. It builds the question bank from the past exams, in parallel with subagents when there are many.
-4. It writes one summary per topic, with one subagent per topic running in parallel. Summaries aim for completeness (every slide's content, no page limit) and include the slides' own diagrams, cropped from the original PDF in vector quality.
-5. It writes the mega exam and its solutions itself (numerical answers are checked with Python), and compiles everything.
+4. It writes one summary per topic, with one subagent per topic running in parallel. Summaries aim for completeness (every slide's content, no page limit) and include the slides' own diagrams, cropped from the original PDF in vector quality. Each subagent also writes a compact key-points file.
+5. It writes the mega exam and its solutions itself from the question bank and the key-points files (numerical answers are checked with Python), and compiles everything.
 6. It writes `STUDY.md`, the map of the folder, including what could not be read.
 
 ## License

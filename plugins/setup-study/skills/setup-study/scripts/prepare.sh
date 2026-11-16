@@ -8,12 +8,16 @@
 #
 # Output (inside <subject_dir>):
 #   md/<topic>.md         raw markitdown of each topic
-#   dedup/<topic>.txt     no blank lines, bullets or repeated lines
+#   dedup/<topic>.txt     no blank lines, bullets, page numbers or repeated
+#                         lines, with "=== p N ===" before each PDF page
 #   <exams_dir>/md/       raw markitdown of each exam (path flattened with _)
-#   <exams_dir>/clean/    exams without blank lines or name/student-no. headers
+#   <exams_dir>/clean/    exams without blank lines, name/student-no. headers,
+#                         repeated whitespace or headers common to most exams
 #   pages/<topic>/        slides.pdf (link to the source PDF) + p-NN.png, one
 #                         image per PDF page, to look at diagrams and to
-#                         \includegraphics[page=N,trim=..,clip] them in LaTeX
+#                         \includegraphics[page=N,trim=..,clip] them in LaTeX,
+#                         and index.txt: per page words, images, shapes and
+#                         FIG when it probably has a diagram/table/figure
 #   <exams_dir>/pages/<exam>/p-NN.png   every exam page, for scans and for
 #                         answers marked only by colour/circles
 #   (<topic> in pages/ is the file name with anything but [A-Za-z0-9._-]
@@ -25,6 +29,7 @@ set -euo pipefail
 BASE=$(cd "$1" && pwd)
 EXAMS=$(cd "$2" && pwd)
 SLIDES=$(cd "${3:-$BASE}" && pwd)
+PAGES_PY="$(cd "$(dirname "$0")" && pwd)/pages.py"
 
 VENV="$HOME/.local/share/markitdown-venv"
 if [ ! -x "$VENV/bin/markitdown" ]; then
@@ -36,6 +41,9 @@ if [ ! -x "$VENV/bin/markitdown" ]; then
     echo "Could not install markitdown>=0.1 with $PY; install python@3.14 with brew" >&2; exit 1; }
 fi
 MD="$VENV/bin/markitdown"
+PY="$VENV/bin/python"
+# pages.py needs pdfminer (comes with markitdown[pdf]) and Pillow (figsheet).
+"$PY" -c 'import pdfminer, PIL' 2>/dev/null || "$VENV/bin/pip" install -q pdfminer.six pillow
 
 REVIEW="$BASE/_review.txt"
 CHANGES="$BASE/_changes.txt"
@@ -73,14 +81,18 @@ find "$SLIDES" -maxdepth 1 -type f \( -iname '*.pdf' -o -iname '*.pptx' -o -inam
   ! -iname 'mega_exam*' ! -iname 'topic*' | sort -V | while read -r f; do
   n=$(basename "$f"); n="${n%.*}"
   s=$(status "$BASE/dedup/$n.txt" "$f")
-  [ -z "$s" ] && continue
+  if [ -z "$s" ]; then
+    # Source unchanged but pages.py updated: redo only the dedup (same
+    # content, new format), without markitdown and without reporting it.
+    if [ -n "$(status "$BASE/dedup/$n.txt" "$PAGES_PY")" ] && [ -e "$BASE/md/$n.md" ]; then
+      "$PY" "$PAGES_PY" dedup "$BASE/md/$n.md" "$BASE/dedup/$n.txt"
+    fi
+    continue
+  fi
   "$MD" "$f" -o "$BASE/md/$n.md" 2>/dev/null || { echo "FAILED topic: $f" >> "$REVIEW"; continue; }
-  # Slide transitions repeat titles and bullets: drop zero-width spaces,
-  # form feeds, bullets, trailing spaces, markdown table separators, blank
-  # lines and any line already seen. (BSD sed has no \f, hence tr.)
-  tr -d '\f' < "$BASE/md/$n.md" | sed 's/\xe2\x80\x8b//g; s/^[ •▪◦●-]*//; s/[[:space:]]*$//' \
-    | grep -v '^\s*$' | grep -vE '^\|[ |:-]*\|$' \
-    | awk '!seen[$0]++' > "$BASE/dedup/$n.txt" || true
+  # Slide transitions repeat titles and bullets: drop bullets, blank lines,
+  # page numbers and any line already seen; mark where each page starts.
+  "$PY" "$PAGES_PY" dedup "$BASE/md/$n.md" "$BASE/dedup/$n.txt"
   echo "TOPIC $s: $BASE/dedup/$n.txt" >> "$CHANGES"
   w=$(wc -w < "$BASE/dedup/$n.txt")
   if [ "$w" -lt 50 ]; then echo "NO TEXT topic ($w words): $f" >> "$REVIEW"; fi
@@ -91,6 +103,9 @@ find "$SLIDES" -maxdepth 1 -type f -iname '*.pdf' ! -iname 'mega_exam*' ! -iname
   n=$(basename "$f"); d="$BASE/pages/$(safe "${n%.*}")"
   render "$f" "$d" 80
   ln -sf "$f" "$d/slides.pdf"
+  if [ -n "$(status "$d/index.txt" "$f")" ] || [ -n "$(status "$d/index.txt" "$PAGES_PY")" ]; then
+    "$PY" "$PAGES_PY" index "$f" "$d/index.txt" 2>/dev/null || echo "# index failed: look at every page" > "$d/index.txt"
+  fi
 done
 
 # --- Exams -------------------------------------------------------------------
@@ -118,6 +133,10 @@ find . -type f -not -path './md/*' -not -path './clean/*' -not -path './pages/*'
       ;;
   esac
 done
+
+# Collapse whitespace and drop the headers repeated across exams (all exams,
+# every run: which headers repeat depends on the whole set).
+"$PY" "$PAGES_PY" exams "$EXAMS/clean"
 
 # Page images of every exam PDF: scans, and solutions marked by colour or
 # circles that the text conversion loses.

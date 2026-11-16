@@ -23,12 +23,14 @@ The user puts the topic PDFs (slides, lab handouts) loose in the subject directo
   <exams>/                   past exams (input)
   md/ dedup/                 converted topics (raw / deduplicated text)
   pages/<topic>/             slides.pdf (link to the source) + p-NN.png per PDF page
+                             + index.txt (which pages have figures)
   <exams>/md/ <exams>/clean/ converted exams
   <exams>/pages/<exam>/      p-NN.png per exam page (scans, colour-marked answers)
   _review.txt _changes.txt   written by prepare.sh
   question_bank.md           step 4
   latex/
     summaries/topicNN.tex    one per in-scope topic, each compiles alone
+    summaries/topicNN_key.md compact key points of the topic, for writing the mega exam
     mega_exam.tex            only the exam (+ formula sheet at the end)
     mega_exam_solutions.tex  solutions, same numbering
 ```
@@ -52,9 +54,10 @@ Never merge everything into one `.tex` with parts (exam / per topic / solutions)
 ```
 
 It installs markitdown (>=0.1) in a reusable venv at `~/.local/share/markitdown-venv` (with Python 3.14/3.13/3.12, since 3.15 lacks onnxruntime). It only converts or renders sources that are new or newer than their output, and lists conversions in `_changes.txt`.
-- `dedup/<topic>.txt`: no blank lines, bullets, form feeds, table separators or repeated lines, so the copies left by slide transitions disappear.
+- `dedup/<topic>.txt`: no blank lines, bullets, page numbers, table separators or repeated lines, so the copies left by slide transitions disappear. A line `=== p N ===` marks where PDF page N starts (pages that only repeat earlier text have no marker), so the text tells you which page each thing is on.
+- `pages/<topic>/index.txt`: one line per page with its words, images and vector shapes, and `FIG` on the pages that have more images or drawing than the slide template, i.e. probably a diagram, table or figure. Its second line lists the FIG pages. Look at the page images of those pages (and of pages whose text looks garbled), not of every page: each image costs far more than the text of the same slide.
 - `pages/<topic>/p-NN.png` (80 dpi) and `<exams>/pages/<exam>/p-NN.png` (100 dpi): one image per PDF page, rendered with pdftoppm, ghostscript or mutool, whichever exists. Use these with the Read tool to look at pages: the Read tool cannot open PDFs when poppler is missing, but it always reads PNGs. Read only the pages you need.
-- `<exams>/clean/`: path flattened (`201415/teste01.pdf` → `201415_teste01.md`), without blank lines or name/student-number headers.
+- `<exams>/clean/`: path flattened (`201415/teste01.pdf` → `201415_teste01.md`), without blank lines, name/student-number headers, runs of whitespace, or header lines that repeat in most exams.
 - `_review.txt`: photos and text-less (scanned) PDFs. Read their page images and transcribe what matters. Do not skip them.
 
 markitdown 0.1.x extracts by columns: diagram labels get glued to neighbouring lines or scattered as loose words (e.g. "Session Layer a medium, which might…"). They are not real text: look at the page image instead. If dedup ate something meaningful (table rows or formulas that repeat on purpose), check the raw `md/` file.
@@ -112,21 +115,22 @@ Extract every question from every clean exam (plus the transcribed scans and ima
 Spawn one subagent per in-scope topic, **all in the same message** so they run in parallel (general-purpose type). Give each this prompt, filled in:
 
 > Write a LaTeX summary in {output_language} of topic {NN} "{title}" of {subject}. {If not English: Keep technical terms in English as the course uses them.} All headings and prose in {output_language}; set the babel language accordingly in the preamble.
-> - Sources: read {abs path to dedup file} entirely. The page images of the original are in {abs path to pages/<topic>/} (p-01.png, p-02.png…, one per PDF page; slides.pdf is the PDF itself). Look at every page that has a diagram, table, figure, code or a layout the text lost; the raw text is {abs path to raw md} if the dedup looks garbled. {If partial: only pages/slides X–Y are in scope.}
-> - Past exam questions for this topic: the "## T{NN}" section of {abs path to question_bank.md} and the rows of its "## Patterns" table that mention T{NN}. Answers marked "not official"/"likely" are not official.
+> - Sources: read {abs path to dedup file} entirely; `=== p N ===` marks where PDF page N starts. The page images of the original are in {abs path to pages/<topic>/} (p-01.png, p-02.png…, one per PDF page; slides.pdf is the PDF itself). Read {abs path to pages/<topic>/index.txt} first: look at the images of the pages it marks FIG, and of any other page whose text is garbled or clearly lost a layout (scattered labels, a table or code that makes no sense). Do not look at the other pages: images cost far more than text. The raw text is {abs path to raw md} if the dedup removed something. {If partial: only pages/slides X–Y are in scope.}
+> - Past exam questions for this topic: the "## T{NN}" section of {abs path to question_bank.md}. Use it only to check that every concept those questions ask about is explained in the summary; do not add a section about past questions or what comes up most (the student studies the theory and then the mega exam).
 > - Start from the preamble {abs path to templates/preamble.tex}; set the header to "{subject} --- {word for Topic in output_language} {NN}" / "{exam date}". The environments `key`, `sol`, `info`, the macros `\Q`, `\D`, `\slidefig` and `listings` are already defined there.
 > - **Completeness over brevity.** This summary replaces the slides for studying: every slide's content must be in it, in slide order, explained (not just listed). Do not drop examples, code, tables, definitions or caveats from the slides to save space. There is no page limit: length follows the material (as a rough guide, one page per 4–6 content slides). Concise wording is welcome; omitting content is not.
-> - **Reuse the slides' own diagrams.** When a slide has a diagram, schema, timeline, table or figure that explains better than prose (state diagrams, memory layouts, protocol exchanges, architecture pictures), include it from the original PDF with `\slidefig{<rel path to slides.pdf from latex/summaries>}{<pdf page>}{<trim l b r t as fractions>}{<caption naming the slide>}`. Find the PDF page and the crop by looking at the page images; check the result by rendering your compiled page to PNG (`gs -q -dNOPAUSE -dBATCH -sDEVICE=png16m -r60 -dFirstPage=K -dLastPage=K -sOutputFile=… topic{NN}.pdf`) and Reading it. Redraw in TikZ only if the original is unreadable or a cleaner version is clearly better. Then explain the figure in the text.
-> - Structure: (1) title with the slide range covered; (2) content, slide by slide or grouped by the slides' own sections, with their figures; (3) formulas, definitions and APIs to memorise, with every variable, unit, prototype and return value as the slides give them; (4) worked examples for every kind of calculation or code the topic has (verify numbers with Python, compile code if you can); (5) what usually comes up: the bank's questions for this topic grouped by pattern, with years, plus typical mistakes.
+> - **Reuse the slides' own diagrams.** When a slide has a diagram, schema, timeline, table or figure that explains better than prose (state diagrams, memory layouts, protocol exchanges, architecture pictures), include it from the original PDF with `\slidefig{<rel path to slides.pdf from latex/summaries>}{<pdf page>}{<trim l b r t as fractions>}{<caption naming the slide>}`. The page number is the `=== p N ===` marker before that content; find the crop from the page image. Check the crops once, after the summary compiles: `~/.local/share/markitdown-venv/bin/python {abs path to scripts/pages.py} figsheet topic{NN}.pdf /tmp/topic{NN}_figs` renders only the pages with figures, four per PNG, and prints which pages each sheet holds; Read the sheets, fix the bad crops, and re-check only the pages you changed. Redraw in TikZ only if the original is unreadable or a cleaner version is clearly better. Then explain the figure in the text.
+> - Structure: (1) title with the slide range covered; (2) content, slide by slide or grouped by the slides' own sections, with their figures; (3) formulas, definitions and APIs to memorise, with every variable, unit, prototype and return value as the slides give them; (4) worked examples for every kind of calculation or code the topic has (verify numbers with Python, compile code if you can); (5) typical mistakes and confusions, if the slides or the bank show any.
 > - Every fact must come from the slides; follow their conventions (units, notation). When you add something the slides do not say (from the bank answers or general knowledge), mark it "(not in the slides)". If something is unclear, say so instead of inventing.
 > - Write {abs path}/latex/summaries/topic{NN}.tex and compile it from that folder with `latexmk -pdf -interaction=nonstopmode -silent topic{NN}.tex`; fix all errors and large overfull boxes, then `latexmk -c topic{NN}.tex` (always with the file name: other agents compile in the same folder at the same time). If latexmk fails because its log vanished, run it again.
+> - Also write {abs path}/latex/summaries/topic{NN}_key.md, in {output_language}, at most ~60 lines: the concepts, definitions, formulas, APIs, numeric conventions and calculation/code patterns of the topic, as compact bullets with the slide page for each (e.g. `- wait() blocks the parent until a child ends; returns its pid; status via WEXITSTATUS (p7)`). It is what the mega exam is written from, so include everything a question could be asked about, and nothing else (no prose, no examples).
 > - Reply with only: the path to the PDF, the page count, which slides you included as figures, and anything in the slides you could not interpret.
 
-When they finish, check that every `topicNN.pdf` exists. Rerun or fix the ones that failed. Keep the "could not interpret" notes: they go into `STUDY.md`.
+When they finish, check that every `topicNN.pdf` and `topicNN_key.md` exists. Rerun or fix the ones that failed. Keep the "could not interpret" notes: they go into `STUDY.md`.
 
 ## 6. Mega exam (main session)
 
-Write it yourself, because it needs the whole picture. Read `question_bank.md` (especially "Patterns"), the summaries and, where needed, the `dedup/` files and page images.
+Write it yourself, because it needs the whole picture. Read `question_bank.md` (especially "Patterns") and every in-scope `latex/summaries/topicNN_key.md`. Do not read the full summaries: the key files exist so this context stays small. Open a summary `.tex`, a `dedup/` file or a page image only for the specific detail a question or solution needs (exact numbers, a figure, a convention).
 
 `latex/mega_exam.tex`, using the same preamble (babel set to `output_language`; title page, instructions and formula sheet in `output_language`, questions in the real exam's language):
 - Title page with an `info` box: date and format of the real exam, scope (in-scope topics), where the questions come from (how many exams, which years, the patterns that repeat most), and how to use it.
@@ -152,7 +156,7 @@ When `study.json` already exists:
 1. Read `STUDY.md`. Run `prepare.sh` again and read `_changes.txt`.
 2. A new topic file → add it to `study.json` and ask whether it is in scope (only about the new ones). If the user changes the scope, update `in_scope`. If they ask for another language, update `output_language` and regenerate all summaries, both exam files and `STUDY.md`.
 3. New or changed exams → extract only those into the bank. First remove the old entries with their `[source …]` tag, then update "Patterns".
-4. Regenerate a summary (subagent, step 5) only if its topic file changed, its bank section changed, it just entered the scope, or the user asks (e.g. after a skill update). Leave the others untouched.
+4. Regenerate a summary (subagent, step 5) only if its topic file changed, its bank section changed, it just entered the scope, or the user asks (e.g. after a skill update). Leave the others untouched. If a summary exists but its `topicNN_key.md` does not (made by an older version), write only the key file from the summary `.tex`, with the same rules as in step 5.
 5. Regenerate the mega exam and its solutions if anything above changed. Otherwise leave them.
 6. Update `STUDY.md` whenever anything above changed.
 7. If `_changes.txt` is empty and the scope did not change, say there is nothing new and stop.

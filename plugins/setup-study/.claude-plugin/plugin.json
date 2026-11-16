@@ -1,7 +1,7 @@
 {
   "name": "setup-study",
   "description": "Turn topic slides and past exams (PDF) into per-topic LaTeX summaries, a question bank and a mega mock exam with solutions",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "Pablo Sabater"
   }
