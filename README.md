@@ -2,16 +2,18 @@
 
 A [Claude Code](https://claude.com/claude-code) skill that turns a subject's slides and past exams into study material:
 
-- **One LaTeX summary per topic** (PDF): essentials, formulas to memorise, a worked example, and what usually comes up in exams.
+- **One LaTeX summary per topic** (PDF): the complete content of the slides, explained, with the slides' own diagrams cropped from the original PDF, formulas and APIs to memorise, worked examples, and what usually comes up in exams.
 - **A question bank** (`question_bank.md`): every past-exam question filed by topic, plus the patterns that repeat most.
 - **A mega mock exam** and a **separate solutions file** (PDF), covering every topic in scope, longer than the real exam on purpose.
+- **`STUDY.md`**: a map of the subject folder (sources, scope, where each kind of information lives, known gaps), so later sessions and agents can work on it without you explaining the structure again.
 
 It asks which topics are in scope and which language to write in, and on re-runs it only regenerates what changed.
 
 ## Requirements
 
 - Claude Code (it runs a shell script, spawns subagents and compiles LaTeX, so it does not work in the claude.ai web app).
-- A LaTeX distribution with `latexmk` and `pdflatex`: [MacTeX](https://tug.org/mactex/) on macOS, TeX Live on Linux.
+- A LaTeX distribution with `latexmk` and `pdflatex`: [MacTeX](https://tug.org/mactex/) on macOS, TeX Live on Linux (it needs the `adjustbox` and `listings` packages, included in both).
+- One PDF renderer, to turn slide and exam pages into images: poppler (`pdftoppm`), ghostscript (`gs`) or mupdf (`mutool`). On macOS, `brew install poppler` also lets Claude's Read tool open PDFs directly.
 - Python 3.12–3.14. The script installs [markitdown](https://github.com/microsoft/markitdown) in its own venv at `~/.local/share/markitdown-venv`. Python 3.15 does not work yet, because onnxruntime has no build for it.
 - Tested on macOS. Linux should work. Windows is not supported (the script is bash).
 
@@ -43,23 +45,26 @@ Open Claude Code in `my-subject/` and run `/setup-study` (or just ask it to prep
 Output:
 
 ```
+STUDY.md                    map of the folder (read this first)
 study.json                  scope, language, exam info (edit freely)
 question_bank.md
 latex/summaries/topicNN.pdf
 latex/mega_exam.pdf
 latex/mega_exam_solutions.pdf
 md/ dedup/ exams/md/ exams/clean/   intermediate text
+pages/ exams/pages/                 one PNG per slide/exam page
 ```
 
 Add more slides or exams later and run it again: it converts only the new files, updates the bank, and regenerates only the affected summaries and the exam.
 
 ## How it works
 
-1. `scripts/prepare.sh` converts every PDF/PPTX/DOCX with markitdown. For slides it removes the lines repeated by slide transitions (each line is kept only the first time it appears). Scanned PDFs and photos are listed in `_review.txt`, and Claude reads those directly.
+1. `scripts/prepare.sh` converts every PDF/PPTX/DOCX with markitdown. For slides it removes the lines repeated by slide transitions (each line is kept only the first time it appears). It also renders every slide and exam page to PNG, so Claude can look at diagrams, scans and answers marked by circles or colour. Scanned PDFs and photos are listed in `_review.txt`, and Claude reads their page images.
 2. Claude asks which topics are in scope and which language to use, and saves the answers in `study.json`.
 3. It builds the question bank from the past exams, in parallel with subagents when there are many.
-4. It writes one summary per topic, with one subagent per topic running in parallel.
+4. It writes one summary per topic, with one subagent per topic running in parallel. Summaries aim for completeness (every slide's content, no page limit) and include the slides' own diagrams, cropped from the original PDF in vector quality.
 5. It writes the mega exam and its solutions itself (numerical answers are checked with Python), and compiles everything.
+6. It writes `STUDY.md`, the map of the folder, including what could not be read.
 
 ## License
 

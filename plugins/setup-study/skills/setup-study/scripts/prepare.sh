@@ -11,6 +11,13 @@
 #   dedup/<topic>.txt     no blank lines, bullets or repeated lines
 #   <exams_dir>/md/       raw markitdown of each exam (path flattened with _)
 #   <exams_dir>/clean/    exams without blank lines or name/student-no. headers
+#   pages/<topic>/        slides.pdf (link to the source PDF) + p-NN.png, one
+#                         image per PDF page, to look at diagrams and to
+#                         \includegraphics[page=N,trim=..,clip] them in LaTeX
+#   <exams_dir>/pages/<exam>/p-NN.png   every exam page, for scans and for
+#                         answers marked only by colour/circles
+#   (<topic> in pages/ is the file name with anything but [A-Za-z0-9._-]
+#   replaced by _, so LaTeX can use the path)
 #   _review.txt           sources with no text (scans, photos) to read by hand
 #   _changes.txt          what was new or changed in this run (empty = nothing)
 set -euo pipefail
@@ -38,6 +45,28 @@ touch "$REVIEW"
 # Echo "new" or "changed" if $1 must be (re)built from $2, nothing otherwise.
 status() { if [ ! -e "$1" ]; then echo new; elif [ "$2" -nt "$1" ]; then echo changed; fi; }
 
+# Name usable in LaTeX paths: no spaces, parentheses, accents...
+safe() { printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9._-' '_'; }
+
+# render <pdf> <outdir> <dpi>: one PNG per page (p-01.png, p-02.png...), so the
+# Read tool can look at pages even without pdftoppm. Skips if up to date.
+render() {
+  local pdf="$1" out="$2" dpi="$3"
+  [ -z "$(status "$out/p-01.png" "$pdf")" ] && return 0
+  rm -rf "$out"; mkdir -p "$out"
+  if command -v pdftoppm >/dev/null; then
+    pdftoppm -r "$dpi" -png "$pdf" "$out/p"
+    # pdftoppm pads to the page count's width; normalise to at least 2 digits
+    for f in "$out"/p-?.png; do [ -e "$f" ] && mv "$f" "$out/p-0${f##*/p-}"; done
+  elif command -v gs >/dev/null; then
+    gs -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=png16m -r"$dpi" -sOutputFile="$out/p-%02d.png" "$pdf"
+  elif command -v mutool >/dev/null; then
+    mutool draw -q -r "$dpi" -o "$out/p-%02d.png" "$pdf"
+  else
+    echo "NO RENDERER (install poppler or ghostscript): $pdf" >> "$REVIEW"; return 0
+  fi
+}
+
 # --- Topics ------------------------------------------------------------------
 mkdir -p "$BASE/md" "$BASE/dedup"
 find "$SLIDES" -maxdepth 1 -type f \( -iname '*.pdf' -o -iname '*.pptx' -o -iname '*.docx' \) \
@@ -57,10 +86,17 @@ find "$SLIDES" -maxdepth 1 -type f \( -iname '*.pdf' -o -iname '*.pptx' -o -inam
   if [ "$w" -lt 50 ]; then echo "NO TEXT topic ($w words): $f" >> "$REVIEW"; fi
 done
 
+# Page images of every topic PDF (also for topics converted in earlier runs).
+find "$SLIDES" -maxdepth 1 -type f -iname '*.pdf' ! -iname 'mega_exam*' ! -iname 'topic*' | while read -r f; do
+  n=$(basename "$f"); d="$BASE/pages/$(safe "${n%.*}")"
+  render "$f" "$d" 80
+  ln -sf "$f" "$d/slides.pdf"
+done
+
 # --- Exams -------------------------------------------------------------------
 mkdir -p "$EXAMS/md" "$EXAMS/clean"
 cd "$EXAMS"
-find . -type f -not -path './md/*' -not -path './clean/*' | sort | while read -r f; do
+find . -type f -not -path './md/*' -not -path './clean/*' -not -path './pages/*' | sort | while read -r f; do
   rel="${f#./}"
   n=$(echo "$rel" | sed 's#/#_#g; s#\.[^.]*$##')
   case "$(echo "$f" | tr "[:upper:]" "[:lower:]")" in
@@ -72,7 +108,7 @@ find . -type f -not -path './md/*' -not -path './clean/*' | sort | while read -r
         | grep -viE '^(NOME|NOMBRE|NAME)\b|^N(º|\.|o)? *(Aluno|Alumno|Student)|^_+$' > "clean/$n.md" || true
       echo "EXAM $s: $EXAMS/clean/$n.md" >> "$CHANGES"
       w=$(wc -w < "clean/$n.md")
-      if [ "$w" -lt 50 ]; then echo "NO TEXT exam ($w words): $EXAMS/$rel" >> "$REVIEW"; fi
+      if [ "$w" -lt 50 ]; then echo "NO TEXT exam ($w words): $EXAMS/$rel -> read $EXAMS/pages/$n/" >> "$REVIEW"; fi
       ;;
     *.jpg|*.jpeg|*.png|*.heic)
       if ! grep -qF "$EXAMS/$rel" "$REVIEW"; then
@@ -81,6 +117,13 @@ find . -type f -not -path './md/*' -not -path './clean/*' | sort | while read -r
       fi
       ;;
   esac
+done
+
+# Page images of every exam PDF: scans, and solutions marked by colour or
+# circles that the text conversion loses.
+find . -type f -iname '*.pdf' -not -path './md/*' -not -path './clean/*' -not -path './pages/*' | sort | while read -r f; do
+  rel="${f#./}"; n=$(echo "$rel" | sed 's#/#_#g; s#\.[^.]*$##')
+  render "$f" "$EXAMS/pages/$n" 100
 done
 
 echo "== Topics (words after dedup)"; wc -w "$BASE"/dedup/*.txt

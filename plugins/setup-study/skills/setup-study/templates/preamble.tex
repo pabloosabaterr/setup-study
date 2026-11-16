@@ -9,6 +9,9 @@
 \usepackage{booktabs}
 \usepackage{enumitem}
 \usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage[export]{adjustbox}
+\usepackage{listings}
 \usepackage{tikz}
 \usetikzlibrary{positioning}
 \usepackage{pgfplots}
@@ -37,6 +40,20 @@
 \newcounter{q}
 \newcommand{\Q}[1]{\refstepcounter{q}\par\medskip\noindent{\large\bfseries\color{accent}\qname\ \theq\ --- #1}\par\nopagebreak\smallskip}
 \newcommand{\D}[1]{\par\smallskip\noindent\textbf{#1}\ }
+
+% Code: \begin{lstlisting} ... \end{lstlisting}, inline \lstinline|x++|
+\lstset{basicstyle=\ttfamily\small,columns=fullflexible,keepspaces=true,
+  frame=single,framerule=0.3pt,rulecolor=\color{black!30},xleftmargin=4pt,xrightmargin=4pt,
+  showstringspaces=false,breaklines=true}
+
+% A figure taken from the original slides (vector quality, cropped):
+%   \slidefig{../../pages/<topic>/slides.pdf}{<pdf page>}{<trim>}{<caption>}
+% <trim> is "left bottom right top" as fractions of the page, e.g.
+%   {.08\width} {.52\height} {.08\width} {.04\height}   (upper half of a 2-up page)
+% Optional first argument: width (default .8\linewidth).
+\newcommand{\slidefig}[5][.8\linewidth]{\par\begin{center}
+  \adjincludegraphics[page=#3,trim=#4,clip,width=#1,max height=.45\textheight,keepaspectratio]{#2}\\[-2pt]
+  {\footnotesize\itshape #5}\end{center}}
 
 \setlist[enumerate]{itemsep=2pt,topsep=3pt}
 \setlist[itemize]{itemsep=1pt,topsep=2pt}
